@@ -5,7 +5,7 @@ package {
 
 		public var seatA:Seat;
 		public var seatB:Seat;
-		protected var cachedDistance:Number;
+		protected var cachedDelta:Number;
 
 		public function SeatXRef(a:Seat, b:Seat) {
 			
@@ -19,18 +19,18 @@ package {
 			// TODO: add listeners to the position of seats to recalculate distance when positions change
 		}
 		
-		public function get distance():Number {
-			if (isNaN(cachedDistance)) {
-				cachedDistance =  calculateDistance();
+		public function get delta():Number {
+			if (isNaN(cachedDelta)) {
+				cachedDelta =  calculateDelta();
 			}
-			return cachedDistance;
+			return cachedDelta;
 		}
 		
 		/**
 		 * This method should only be called internally until the points change position
 		 * Otherwise, cached distance should be accessed via distance getter
 		 */
-		public function calculateDistance():Number {
+		public function calculateDelta():Number {
 			return Point.distance(seatA.coords, seatB.coords);
 		}
 		

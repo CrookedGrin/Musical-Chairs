@@ -8,5 +8,11 @@ package {
 		
 		public function Student() {
 		}
+		
+		public function addXRef(param0:StudentXRef):void
+		{
+			// TODO Auto Generated method stub
+			
+		}
 	}
 }
