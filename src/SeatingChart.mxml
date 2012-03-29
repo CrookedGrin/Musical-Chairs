@@ -15,6 +15,9 @@
 			
 			import spark.collections.Sort;
 			
+			protected var numCols:int = 10;
+			protected var numRows:int = 5;
+			protected var slots:Vector.<SeatSlot>;
 			protected var seats:Vector.<Seat>;
 			protected var seatXRefs:Vector.<SeatXRef>;
 			protected var seatTranches:BasicMap;
@@ -30,7 +33,7 @@
 			 */
 			public function initChart():void {
 				createSeats();
-				createSeatXRefs();
+//				createSeatXRefs(); // obsolete
 				createStudents();
 				createRuleGroups();
 				createStudentXRefs();
@@ -39,12 +42,13 @@
 			}
 			
 			protected function createSeats():void {
+				slots = new Vector.<SeatSlot>;
 				seats = new Vector.<Seat>;
-				var numRows:uint = 10;
-				var numCols:uint = 5;
+				var slot:SeatSlot;
 				var seat:Seat;
 				for (var row:uint = 0; row<numRows; row++) {
 					for (var col:uint = 0; col<numCols; col++) {
+						slot = new SeatSlot();
 						seat = new Seat();
 						seat.rowIndex = row;
 						seat.colIndex = col;
@@ -65,14 +69,14 @@
 					for (var j:uint = i+1; j < seats.length; j++) {
 						var pairedSeat:Seat = seats[j] as Seat;
 						var xRef:SeatXRef = new SeatXRef(startingSeat, pairedSeat);
-						var Tranche:StudentTranche;
+						var tranche:StudentTranche;
 						if (!seatTranches.containsKey(xRef.delta)) {
-							Tranche = new StudentTranche();
-							seatTranches.put(xRef.delta, Tranche);
+							tranche = new StudentTranche();
+							seatTranches.put(xRef.delta, tranche);
 						} else {
-							Tranche = seatTranches.get(xRef.delta);
+							tranche = seatTranches.get(xRef.delta);
 						}
-						Tranche.addItem(xRef);
+						tranche.addItem(xRef);
 						seatXRefs.push(xRef);
 					}
 				}
@@ -117,7 +121,7 @@
 					var studentB:Student = students[studentIndex+1];
 					var studentC:Student = students[studentIndex+2];
 					// make weight incrementally a little heavier, so sorting is more likely unique
-					// TODO: this should be replicated in UI rule sorting order (implicit, not set by user directly)
+					// TODO: this will be replaced by rule sorting order in UI (implicit, not set by user directly)
 					var weight:Number = i * 10;
 					var group:RuleGroup = new RuleGroup(i, weight, [studentA, studentB, studentC]);
 					ruleGroups.push(group); 
@@ -132,14 +136,14 @@
 					for (var j:uint = i+1; j < students.length; j++) {
 						var pairedStudent:Student = students[j] as Student;
 						var xRef:StudentXRef = new StudentXRef(startingStudent, pairedStudent);
-						var Tranche:StudentTranche;
+						var tranche:StudentTranche;
 						if (!studentTranches.containsKey(xRef.delta)) {
-							Tranche = new StudentTranche();
-							studentTranches.put(xRef.delta, Tranche);
+							tranche = new StudentTranche();
+							studentTranches.put(xRef.delta, tranche);
 						} else {
-							Tranche = studentTranches.get(xRef.delta);
+							tranche = studentTranches.get(xRef.delta);
 						}
-						Tranche.addItem(xRef);
+						tranche.addItem(xRef);
 						studentXRefs.push(xRef);
 					}
 				}
@@ -162,83 +166,96 @@
 			protected function assignSeats():void {
 				var studentTrancheKeys:Array = studentTranches.keySet.toArray();
 				studentTrancheKeys.sort(Array.DESCENDING);
-				var seatTrancheKeys:Array = seatTranches.keySet.toArray();
-				seatTrancheKeys.sort(Array.DESCENDING);
-				// TODO: Manually-assigned seats shall not be included in this collection
-				var openSeats:Vector.<Seat>;
-				// starting with the top Tranche (students who should be furthest apart), assign 
-				// pairs of students to pairs of seats, delta to delta
-				// TODO: this would require that seat x-refs be re-calculated after each pair of seat
-				// assignments, taking into account occupied seats as they fill up;
-				// might be way too inefficient
-
-				// Find n seats (n = students in this Tranchee) that are all above-average delta w/r to each other
-				// i.e, if the delta between a given seat and any of the others in the group is not above average,
-				// average being the threshold here, reject it and grab the next one
-				// if you get through all the seats and can't find one that's above average agaist all the others,
-				// need to start combing the dregs
-				// some limit needed on number of students
-				// better, but expensive, would be to somehow measure all groups of n seats in the available set
-				// and keep the one where the cross-delta average is highest, maybe; except in that case, you could have 
-				// outliers throw off the average
-				// sum rather than average, perhaps? this is where i need math help.
-				// also need limits; if n is bigger than available seats, for example, there's trouble, but that
-				// shouldn't be possible, since the students are uniquely in one Tranchee or another
-				// better: find the one threshold seat xref below which it can't be included; in other words,
-				// knowing how many seats we're looking for, and how many xrefs exist corresponding to the number of
-				// available seats, should be able to figure out the median xref just by figuring out how many
-				// xrefs there are in the group of n seats and getting the xref from the sorted list at the index of
-				// that number. that's the threshold. then it's just a matter of iterating through and finding a group
-				// of seats that are all above that threshold.  right?
+				// TODO: Manually-assigned seats will have been placed before this point (upon load, or before user requests new arrangement)
+				// starting with the top tranche (students who should be furthest apart), assign 
+				// students sequentially to non-adjacent seats:
+				// For each tranche:
+				// - Get list of already-seated antagonists, if there are any 
+				// - Find all antagonist-adjacent seats; remove from pool of available
+				// For each un-seated student in that tranche:
+				// - Place student in random available seat
+				// - Get adjacent to that new seat and remove from pool
+				// - Iterate to next, pool shrinking each time
+				//   - Handle condition where there aren't any non-adjacent seats; find one that's corner-adjacent to only one, if possible, then degrade gracefully
 				
-				// Seat xrefs are already sorted so all the highest seat-deltas are at the top; therefore, if you take the top 
-				// scoop of seat xrefs, none of them will be too small of a delta. Find the max number of xrefs that
-				// corresponds to the number of students in the current Tranche; there should only be a certain number of 
-				// seats represented by those xrefs, and the studens in the Tranche should be safely assignable to any one
-				// of those seats. However, it would need to be a set of n seats that *all* appear in the top seat xrefs
-				// in relation to each other.  for example, the top 2 xrefs could easily involve adjacent seats, but the xrefs of
-				// thos adjacent seats wouldn't appear in the top area of the xrefs.  the curtoff point for the "best" xrefs should
-				// be the index at the max number of possible xrefs between n seats, which is calculable by
-				
-				// method 3: OK, this might work: grab the first available seat.  This seat has a list of xrefs in which it's a participant.
-				// sort *that* list. Grab the opponent in the top seat of the sorted list. fuck, that doesn't work either
-				
-				// need to find first n seats that, between them, have the highest possible xref deltas; start with method 3 and 
-				// the first n canditates based on who's furthest from seat A. then, for each of those candidates, 
-				
-				// method 4: starting from the top of the xrefs, iterate through and find the first set of n seats where all of them
-				// appear in the top-most xrefs.  each seat has a finite number of xrefs in which it participates. at any given point, all
-				// available seats each belong to the same number of xrefs. iterate through all the seats and create a set containing only the top 
-				// xref from each seat; should end up with half as many unique xrefs in this set as there are seats (i think). From this set, attempt
-				// to place the n students in... no. 
-				
-				// method 5: brute force! for each unique subset of n xrefs (binomial coefficient), calculate standard deviation (sum of differences from mean). for efficiency's
-				// sake, first lop off lowest Tranche, iff there are enough xrefs in the remaining Tranches.
-				var seatXRefSubsets:Vector.<Vector.<SeatXRef>> = new Vector.<Vector.<SeatXRef>>; // set of sets of xrefs
-				var ruleGroup:RuleGroup = ruleGroups[0] as RuleGroup;
-				var binom:int = getBinom(seatXRefs.length, ruleGroup.students.length);
-				trace("Binomial Coefficient for ruleGroup " + ruleGroup.id + ": " + binom);
-				
-				// simpler method: we don't really need the maximum distance; we just need them not to be adjacent. That means just making sure that seat A
+				// Find random non-adjacent seat by elimitating adjacent seats. That means just making sure that seat A
 				// chosen is not one of the closest to seat B; in a rectangular seating plan, eliminating the closest 8 seats guarantes at least one seat is 
 				// between A and B (5 if one of the seats is along an edge, and only 3 if one is a corner seat.  a seat is on an "edge" if it's got a min/max
 				// x or y value; it's a "corner" if it has both. Doesn't really work for odd arrangements like a circle, but fuck off.
 				// Note: seat tranches are unnecessary in this case; student tranches are still relevant.
+				
+				// get initially available seats
+				var unoccupied:Vector.<Seat> = seats.concat();
+				var occupied:Vector.<Seat> = new Vector.<Seat>;
+				//TEST: insert fake manually-placed seats here
+				var adjacent:Vector.<Seat> = new Vector.<Seat>;
+				for each (var seat:Seat in seats) {
+					if (seat.student) {
+						occupied.push(seat);
+						if (unoccupied.indexOf(seat) > -1) {
+							unoccupied.splice(unoccupied.indexOf(seat), 1);
+						}
+					}
+				}
+				
 				for each (var key:Number in studentTrancheKeys) {
 					var tranche:StudentTranche = studentTranches.get(key) as StudentTranche;
 					tranche.shuffle();
-					placeStudents(tranche, seats);
+					placeStudentTranche(tranche, unoccupied.concat());
 				}
 
 			}
 			
-			protected function placeStudents(tranche:StudentTranche, availableSeats:Vector.<Seat>):void {
-				for each (var student:Student in tranche) {
-					// 1. pick a random unoccupied seat that's not adjacent (within adjacency limits as defined by edges/corners) to a seat occupied by another
-					// student in this same tranche
-					var seat:Seat = getValidUnoccupiedSeat(student);
+			/**
+			 * Search in a  ring around the given seat and return all the seats "touching" it, in order of how easy
+			 * it is to make contact with the student in that seat (for example, it's a lot easier to talk to or signal
+			 * someone sitting to one side than someone sitting behind and to one side. A bit subjective.)
+			 * Some seat arrangement examples:
+			 *  ABC     A        ABC
+			 *  DEF     B       D   E
+			 *  GHI   CDEFG    F     G
+			 *  JKL     H       H   I
+			 *  MNO     I        JKL 
+			 */
+			protected function getAdjacentSeats(seat:Seat):Vector.<Seat> {
+				var adjSeats:Vector.<Seat> = new Vector.<Seat>;
+				// search in a circle around the seat, basically.
+				// First, look to either side.
+				for each (var otherSeat:Seat in seats) {
+//					if (otherSeat
+				}
+				return adjSeats;
+			}
+						
+			protected function placeStudentTranche(tranche:StudentTranche, unoccupied:Vector.<Seat>):void {
+				// Take set of unoccupied seats and eliminate those that are ajacent to any occupied by
+				// students in this tranche.
+				var available:Vector.<Seat> = getAvailableSeats(tranche, unoccupied);
+				// With each loop though, the pool of available seats narrows.
+				for each (var student:Student in tranche.items) {
+					
 				}
 			}
+			
+			protected function getAvailableSeats(tranche:StudentTranche, unoccupied:Vector.<Seat>):Vector.<Seat> {
+				var available:Vector.<Seat> = new Vector.<Seat>;
+				// Iterate through students and add all seats adjacent to occupied seats
+				var adjSeats:Vector.<Seat> = new Vector.<Seat>;
+				for each (var student:Student in tranche) {
+					if (student.seat) {
+						adjSeats = adjSeats.concat(getAdjacentSeats(student.seat));
+					}
+				}
+				for each (var seat:Seat in unoccupied) {
+					if (adjSeats.indexOf(seat) < 0) {
+						// seat is not adjacent to a seat occupied by a student in the given tranche, so include it
+						available.push(seat);
+					}
+				}
+				return available;
+			}
+			
+
 			
 			protected function getValidUnoccupiedSeat(student:Student):Seat {
 				var seat:Seat;
@@ -252,44 +269,7 @@
 				return seat;
 			}
 			
-			/**
-			 * Based on whether the given seat is an edge seat, a corner seat, neither, or both (at the end of a single column, for ex),
-			 * determine n number of seats that count as "adjacent" to that seat, and grab n seats with the lowest proximity to the given seat.
-			 * Some examples:
-			 *  ABC     A        ABC
-			 *  DEF     B       D   E
-			 *  GHI   CDEFG    F     G
-			 *  JKL     H       H   I
-			 *  MNO     I        JKL 
-			 */
-			protected function getAdjacentSeats(seat:Seat):Vector.<Seat> {
-				var adjSeats:Vector.<Seat> = new Vector.<Seat>;
-				// search in a circle around the seat, basically.
-				return adjSeats;
-			}
-			
-			/**
-			 * 2 seats = 1 xref: (AB)
-			 * 3 seats = 3 xrefs (AB, AC, BC)
-			 * 4 seats = 6 xrefs (AB, AC, AD, BC, BD, CD)
-			 * 5 seats = 10 xrefs (AB, AC, AD, AE, BC, BD, BE, CD, CE, DE)
-			 */
-			
-			/**
-			 * Return the binomial coefficient of (n/k), i.e., the number of subsets of length k in superset of length n
-			 * http://www.brpreiss.com/books/opus5/html/page460.html
-			 */
-			protected function getBinom( n:int, k:int ):int {
-				var b:Vector.<int> = new Vector.<int>(n+1);
-				b[0] = 1;
-				for (var i:int = 1; i <= n; ++i) {
-					b[i] = 1;
-					for (var j:int = i-1; j > 0; --j) {
-						b[j] += b[j-1];
-					}
-				}
-				return b[k];
-			}
+
 			
 // *** Display
 			

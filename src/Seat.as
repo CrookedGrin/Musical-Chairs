@@ -1,27 +1,18 @@
 package {
 	import flash.display.Sprite;
-	import flash.geom.Point;
 	import flash.text.TextField;
 	
 	import mx.core.UIComponent;
-	
-	import spark.components.Label;
 
-	public class Seat {
+	public class Seat extends SeatSlot {
 		
-		public var id:int;
-		public var rowIndex:int;
-		public var colIndex:int;
-		public var coords:Point; // on-screen x-y position
 		public var student:Student;
 		public var xRefs:Vector.<SeatXRef>;
 		
-		protected var uiComp:UIComponent;
-		protected var bgSprite:Sprite;
 		protected var seatNumLabel:TextField;
 		protected var studentLabel:TextField;
 		
-		public static const SEAT_SIZE:Number = 100;
+		public static const SEAT_SIZE:Number = 80;
 		
 		public function Seat() {
 			xRefs = new Vector.<SeatXRef>;
