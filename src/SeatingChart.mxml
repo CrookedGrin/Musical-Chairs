@@ -28,8 +28,8 @@
 			public var displayContainer:UIComponent;
 			
 			/**
-			 * NOTE: For ease of calculation and simplified storage, seat position will snap to a grid. This makes the concept of adjaceny explicit: if a
-			 * seat is in a slot that shares an edge or corner, it's adjacent, an if not, it's not.  Simple as that.  Coordinates are integer row/column indexes.
+			 * NOTE: For ease of calculation and simplified storage, seat position will snap to a grid. This makes the concept of adjacency explicit: if a
+			 * seat is in a slot that shares an edge or corner, it's adjacent; if not, it's not.  Simple as that.  Coordinates are integer row/column indexes.
 			 */
 			public function initChart():void {
 				createSeats();
@@ -41,6 +41,9 @@
 				createDisplay();
 			}
 			
+			/**
+			 * Iterate through rows and columns and create slots where seats can be placed (empty holes in the grid).
+			 */
 			protected function createSeats():void {
 				slots = new Vector.<SeatSlot>;
 				seats = new Vector.<Seat>;
@@ -61,6 +64,11 @@
 				}
 			}
 			
+			/**
+			 * OBSOLETE
+			 * Iterate through all pairs of seats and calculate distance between each pair.
+			 */
+			/*
 			protected function createSeatXRefs():void {
 				seatXRefs = new Vector.<SeatXRef>;
 				seatTranches = new BasicMap();
@@ -82,7 +90,13 @@
 				}
 //				seatXRefs.sort(seatDeltaSort);
 			}
+			*/
 			
+			/**
+			 * OBSOLETE
+			 * Sorting function for seat xRefs
+			 */
+			/*
 			protected function seatDeltaSort(a:SeatXRef, b:SeatXRef):Number {
 				if (a.delta < b.delta)  {
 					return -1;
@@ -92,7 +106,11 @@
 					return 0;
 				}
 			}
+			*/
 			
+			/**
+			 * Create arbitrary number of Student objects
+			 */
 			protected function createStudents():void {
 				students = new Vector.<Student>;
 				for (var i:uint = 0; i < 50; i++) {
@@ -104,30 +122,45 @@
 			}
 			
 			/**
-			 * create n arbitrary sets of Students and group them together.
-			 * students in the same set should be kept separated, by default;
-			 * rule contains a proximity coefficient that recieves a rank for each pair
-			 * of students, as the seat proximity does for seats, except the criteria
-			 * here is the rule, not the actual distance. Priority becomes another multiplier
-			 * for the coeffient, so the top rule gets a heavier weight. Then the sorted 
-			 * coefficients are matched to seats already sorted by proximity, with random
-			 * choices filling in gaps.
+			 * Create arbitrary sets of Students that should not sit near each other.  In the UI,
+			 * these RuleGroups will be implicitly prioritized (as a list).
+			 * For M/F alternation, perhaps take whichever gender has fewer students and make that
+			 * the lowest priority RuleGroup 
 			 */
 			protected function createRuleGroups():void {
 				ruleGroups = new Vector.<RuleGroup>;
 				for (var i:uint = 1; i < 4; ++i) {
-					var studentIndex:int = Math.round(Math.random() * students.length-3);
+					var studentIndex:int = Math.round(Math.random() * (students.length-3));
 					var studentA:Student = students[studentIndex];
 					var studentB:Student = students[studentIndex+1];
 					var studentC:Student = students[studentIndex+2];
-					// make weight incrementally a little heavier, so sorting is more likely unique
-					// TODO: this will be replaced by rule sorting order in UI (implicit, not set by user directly)
-					var weight:Number = i * 10;
+					// TODO: weight will be replaced by rule sorting order in UI (implicit, not set by user directly)
+					var weight:Number = i;
 					var group:RuleGroup = new RuleGroup(i, weight, [studentA, studentB, studentC]);
 					ruleGroups.push(group); 
 				}
+				ruleGroups.sort(ruleGroupSort);
 			}
 			
+			/**
+			 * Sorting function for rule groups by weight
+			 */
+			protected function ruleGroupSort(a:RuleGroup, b:RuleGroup):Number {
+				if (a.weight < b.weight)  {
+					return -1;
+				} else if (a.weight > b.weight) {
+					return 1;
+				} else {
+					return 0;
+				}
+			}
+			
+			/**
+			 * Iterate through Students and create xRefs between each pair. Each xRef has a "delta" getter
+			 * value based on whether the two students are in RuleGroup(s) together, along with the weight of those RuleGroups.
+			 * xRefs with the same delta are grouped together in tranches (i.e., within a tranche, there's the same
+			 * importance that each of those students are separated from each other).
+			 */
 			protected function createStudentXRefs():void {
 				studentXRefs = new Vector.<StudentXRef>;
 				studentTranches = new BasicMap();
@@ -147,9 +180,11 @@
 						studentXRefs.push(xRef);
 					}
 				}
-//				studentXRefs.sort(studentDeltaSort);
+				// not necessary, since already sorted into Tranches
+//				studentXRefs.sort(studentDeltaSort); 
 			}
 			
+			/*
 			protected function studentDeltaSort(a:StudentXRef, b:StudentXRef):Number {
 				if (a.delta < b.delta)  {
 					return -1;
@@ -159,6 +194,7 @@
 					return 0;
 				}
 			}
+			*/
 
 			/**
 			 * Apply business rules
