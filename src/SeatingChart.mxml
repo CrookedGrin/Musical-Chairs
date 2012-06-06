@@ -33,7 +33,6 @@
 			 */
 			public function initChart():void {
 				createSeats();
-//				createSeatXRefs(); // obsolete
 				createStudents();
 				createRuleGroups();
 				createStudentXRefs();
@@ -63,50 +62,6 @@
 					}
 				}
 			}
-			
-			/**
-			 * OBSOLETE
-			 * Iterate through all pairs of seats and calculate distance between each pair.
-			 */
-			/*
-			protected function createSeatXRefs():void {
-				seatXRefs = new Vector.<SeatXRef>;
-				seatTranches = new BasicMap();
-				for (var i:uint = 0; i < seats.length-1; i++) {
-					var startingSeat:Seat = seats[i] as Seat;
-					for (var j:uint = i+1; j < seats.length; j++) {
-						var pairedSeat:Seat = seats[j] as Seat;
-						var xRef:SeatXRef = new SeatXRef(startingSeat, pairedSeat);
-						var tranche:StudentTranche;
-						if (!seatTranches.containsKey(xRef.delta)) {
-							tranche = new StudentTranche();
-							seatTranches.put(xRef.delta, tranche);
-						} else {
-							tranche = seatTranches.get(xRef.delta);
-						}
-						tranche.addItem(xRef);
-						seatXRefs.push(xRef);
-					}
-				}
-//				seatXRefs.sort(seatDeltaSort);
-			}
-			*/
-			
-			/**
-			 * OBSOLETE
-			 * Sorting function for seat xRefs
-			 */
-			/*
-			protected function seatDeltaSort(a:SeatXRef, b:SeatXRef):Number {
-				if (a.delta < b.delta)  {
-					return -1;
-				} else if (a.delta > b.delta) {
-					return 1;
-				} else {
-					return 0;
-				}
-			}
-			*/
 			
 			/**
 			 * Create arbitrary number of Student objects
@@ -180,21 +135,8 @@
 						studentXRefs.push(xRef);
 					}
 				}
-				// not necessary, since already sorted into Tranches
-//				studentXRefs.sort(studentDeltaSort); 
 			}
 			
-			/*
-			protected function studentDeltaSort(a:StudentXRef, b:StudentXRef):Number {
-				if (a.delta < b.delta)  {
-					return -1;
-				} else if (a.delta > b.delta) {
-					return 1;
-				} else {
-					return 0;
-				}
-			}
-			*/
 
 			/**
 			 * Apply business rules
@@ -256,9 +198,11 @@
 			protected function getAdjacentSeats(seat:Seat):Vector.<Seat> {
 				var adjSeats:Vector.<Seat> = new Vector.<Seat>;
 				// search in a circle around the seat, basically.
-				// First, look to either side.
 				for each (var otherSeat:Seat in seats) {
-//					if (otherSeat
+					if ( ((otherSeat.rowIndex == seat.rowIndex) || (otherSeat.rowIndex == seat.rowIndex+1) || (otherSeat.rowIndex == seat.rowIndex-1)) &&
+						((otherSeat.colIndex == seat.colIndex) || (otherSeat.colIndex == seat.colIndex+1) || (otherSeat.colIndex == seat.colIndex-1)) )  {
+						adjSeats.push(otherSeat);
+					}
 				}
 				return adjSeats;
 			}
